@@ -1,0 +1,6 @@
+{
+  "name": "S V Copiers & Stationery - Ahmedabad Reprographic Centre",
+  "description": "Digital catalogue and commercial reprographic services portal for S V Copiers & Xerox in Nana Chiloda, Ahmedabad.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
