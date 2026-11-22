@@ -554,7 +554,7 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
   response.status(500).json({ error: 'An unexpected server error occurred.' });
 });
 
-const port = Number(process.env.API_PORT || 3001);
+const port = Number(process.env.PORT || process.env.API_PORT || 3001);
 loadDatabase().then(() => {
   app.listen(port, '0.0.0.0', () => {
     console.log(`S V Copiers API listening on http://localhost:${port}/api/v1`);
