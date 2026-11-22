@@ -38,9 +38,11 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=replace-with-a-strong-private-password
 ADMIN_TOKEN_SECRET=replace-with-a-long-random-secret
 MONGODB_URI=mongodb://127.0.0.1:27017/sv_copiers
+IMAGEKIT_PRIVATE_KEY=your-imagekit-private-key
 ```
 
 Keep `.env` private and never use temporary development credentials in production. Configure `API_PORT` and `DATA_FILE` to change the API port or data file location.
+The admin product form uploads JPEG, PNG, WebP, and GIF images (up to 5 MB) through the authenticated API to the ImageKit `/products` folder. Configure `IMAGEKIT_PRIVATE_KEY` on the API server; the private key is never sent to the browser. ImageKit uploads fail with a configuration error until this value is set.
 
 ## API
 

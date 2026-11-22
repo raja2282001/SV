@@ -28,6 +28,32 @@ export async function apiRequest<T>(
   return body as T;
 }
 
+export async function uploadProductImage(file: File, token: string): Promise<string> {
+  const query = new URLSearchParams({ fileName: file.name });
+  const response = await fetch(`${apiBaseUrl}/admin/images?${query}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': file.type,
+    },
+    body: file,
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = body && typeof body === 'object' && 'error' in body &&
+      typeof body.error === 'string'
+      ? body.error
+      : `Image upload failed with status ${response.status}.`;
+    throw new ApiError(message, response.status);
+  }
+  if (!body || typeof body !== 'object' || !('data' in body) ||
+      !body.data || typeof body.data !== 'object' || !('url' in body.data) ||
+      typeof body.data.url !== 'string') {
+    throw new ApiError('The server returned an invalid image upload response.', 502);
+  }
+  return body.data.url;
+}
+
 export function apiErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'The server request failed.';
 }

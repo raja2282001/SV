@@ -110,23 +110,29 @@ function cleanMongoDocuments(documents: object[]): Array<Record<string, unknown>
 
 async function loadDatabase(): Promise<void> {
   if (process.env.MONGODB_URI) {
-    await mongoose.connect(process.env.MONGODB_URI);
-    const [products, categories, services, settings, enquiries] = await Promise.all([
-      ProductModel.find().exec(),
-      CategoryModel.find().exec(),
-      ServiceModel.find().exec(),
-      BusinessSettingsModel.findOne({ id: 'public' }).exec(),
-      ContactEnquiryModel.find().sort({ createdAt: -1 }).exec(),
-    ]);
-    database = {
-      products: cleanMongoDocuments(products) as unknown as Product[],
-      categories: cleanMongoDocuments(categories) as unknown as Category[],
-      services: cleanMongoDocuments(services) as unknown as Service[],
-      settings: settings ? cleanMongoDocuments([settings])[0] : initialDatabase.settings,
-      enquiries: cleanMongoDocuments(enquiries) as unknown as Enquiry[],
-    };
-    if (!settings) await persistDatabase();
-    return;
+    try {
+      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+      const [products, categories, services, settings, enquiries] = await Promise.all([
+        ProductModel.find().exec(),
+        CategoryModel.find().exec(),
+        ServiceModel.find().exec(),
+        BusinessSettingsModel.findOne({ id: 'public' }).exec(),
+        ContactEnquiryModel.find().sort({ createdAt: -1 }).exec(),
+      ]);
+      database = {
+        products: cleanMongoDocuments(products) as unknown as Product[],
+        categories: cleanMongoDocuments(categories) as unknown as Category[],
+        services: cleanMongoDocuments(services) as unknown as Service[],
+        settings: settings ? cleanMongoDocuments([settings])[0] : initialDatabase.settings,
+        enquiries: cleanMongoDocuments(enquiries) as unknown as Enquiry[],
+      };
+      if (!settings) await persistDatabase();
+      console.log('Connected to MongoDB.');
+      return;
+    } catch (error) {
+      console.warn('MongoDB is unavailable. Falling back to local JSON data:', (error as Error).message);
+      await mongoose.disconnect().catch(() => undefined);
+    }
   }
   try {
     database = { ...initialDatabase, ...JSON.parse(await readFile(dataFile, 'utf8')) };
@@ -414,6 +420,86 @@ app.post('/api/v1/contact', rateLimit(5, 15 * 60 * 1000), asyncRoute(async (requ
 }));
 
 app.use('/api/v1/admin', requireAdmin);
+
+const imageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const imageExtensions: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+
+function matchesImageSignature(buffer: Buffer, mimeType: string): boolean {
+  if (mimeType === 'image/jpeg') return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mimeType === 'image/png') return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (mimeType === 'image/gif') return buffer.subarray(0, 6).toString('ascii').match(/^GIF8[79]a$/) !== null;
+  if (mimeType === 'image/webp') return buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  return false;
+}
+
+app.post(
+  '/api/v1/admin/images',
+  rateLimit(10, 15 * 60 * 1000),
+  express.raw({ type: [...imageMimeTypes], limit: '5mb' }),
+  asyncRoute(async (request, response) => {
+    const privateKey = process.env.IMAGEKIT_PRIVATE_KEY;
+    if (!privateKey) {
+      response.status(503).json({ error: 'Image uploads are not configured on the server.' });
+      return;
+    }
+
+    const mimeType = request.header('content-type')?.toLowerCase() || '';
+    const fileName = request.query.fileName;
+    if (!imageMimeTypes.has(mimeType) || !Buffer.isBuffer(request.body) ||
+        request.body.length === 0 || !matchesImageSignature(request.body, mimeType)) {
+      response.status(400).json({ error: 'Choose a valid JPEG, PNG, WebP, or GIF image.' });
+      return;
+    }
+    if (typeof fileName !== 'string' || fileName.length > 255) {
+      response.status(400).json({ error: 'A valid image file name is required.' });
+      return;
+    }
+
+    const baseName = fileName.replace(/\.[^.]*$/, '').replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80) || 'product-image';
+    const uploadFileName = `${baseName}${imageExtensions[mimeType]}`;
+    const formData = new FormData();
+    const imageBytes = new Uint8Array(request.body.length);
+    imageBytes.set(request.body);
+    formData.append('file', new Blob([imageBytes], { type: mimeType }), uploadFileName);
+    formData.append('fileName', uploadFileName);
+    formData.append('folder', '/products');
+
+    const imageKitResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${privateKey}:`).toString('base64')}`,
+      },
+      body: formData,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const imageKitResult: unknown = await imageKitResponse.json().catch(() => null);
+    if (!imageKitResponse.ok) {
+      console.error(`ImageKit upload failed with status ${imageKitResponse.status}.`);
+      response.status(502).json({ error: 'ImageKit could not upload this image.' });
+      return;
+    }
+    if (!imageKitResult || typeof imageKitResult !== 'object' || !('url' in imageKitResult) ||
+        typeof imageKitResult.url !== 'string') {
+      console.error('ImageKit returned an invalid image upload response.');
+      response.status(502).json({ error: 'ImageKit returned an invalid upload response.' });
+      return;
+    }
+    response.status(201).json({ data: { url: imageKitResult.url } });
+  }),
+  (error: unknown, _request: Request, response: Response, next: NextFunction) => {
+    if (error && typeof error === 'object' && 'status' in error && error.status === 413) {
+      response.status(413).json({ error: 'Image files must be 5 MB or smaller.' });
+      return;
+    }
+    next(error);
+  },
+);
 
 app.get('/api/v1/admin/products', (_request, response) => {
   response.json({ data: database.products });

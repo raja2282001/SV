@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../data/initialData';
+import { apiErrorMessage, uploadProductImage } from '../lib/api';
 
 export const AdminView: React.FC = () => {
   const {
@@ -42,6 +43,7 @@ export const AdminView: React.FC = () => {
   const [formIsPublic, setFormIsPublic] = useState(true);
   const [formDesc, setFormDesc] = useState('');
   const [formImage, setFormImage] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Editable local rate cards map
   const [editableRates, setEditableRates] = useState<Record<string, number>>(() => {
@@ -137,8 +139,34 @@ export const AdminView: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleImageUpload = async (file: File) => {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      showToast('Choose a JPEG, PNG, WebP, or GIF image.', 'warning');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Image files must be 5 MB or smaller.', 'warning');
+      return;
+    }
+    if (!adminToken) {
+      showToast('Please log in to the admin portal again.', 'warning');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      setFormImage(await uploadProductImage(file, adminToken));
+      showToast('Product image uploaded.');
+    } catch (error) {
+      showToast(apiErrorMessage(error), 'warning');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
   const handleProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploadingImage) return;
     const priceNum = parseFloat(formPrice) || 0;
 
     if (editingProductId) {
@@ -1208,15 +1236,39 @@ export const AdminView: React.FC = () => {
 
               <div>
                 <label className="font-['Space_Grotesk'] text-[11px] text-[#45464d] uppercase font-bold block mb-1">
-                  Product Image URL
+                  Product Image
                 </label>
                 <input
                   type="url"
-                  placeholder="Paste image URL (or use default)"
+                  placeholder="Paste an image URL or upload an image"
                   value={formImage}
                   onChange={e => setFormImage(e.target.value)}
                   className="w-full p-2 bg-[#eff4ff] text-[#0b1c30] font-['Plus_Jakarta_Sans'] text-xs rounded border border-[#dce9ff] focus:outline-none"
                 />
+                <div className="mt-2 flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    aria-label="Upload product image"
+                    disabled={isUploadingImage}
+                    onChange={event => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = '';
+                      if (file) void handleImageUpload(file);
+                    }}
+                    className="min-w-0 flex-1 text-xs text-[#45464d] file:mr-3 file:rounded file:border-0 file:bg-[#eff4ff] file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#0b1c30]"
+                  />
+                  <span className="shrink-0 text-[11px] text-[#45464d]">
+                    {isUploadingImage ? 'Uploading…' : 'JPEG, PNG, WebP, GIF · max 5 MB'}
+                  </span>
+                </div>
+                {formImage && (
+                  <img
+                    alt="Product preview"
+                    src={formImage}
+                    className="mt-3 h-20 w-20 rounded-lg border border-[#dce9ff] bg-[#eff4ff] object-contain"
+                  />
+                )}
               </div>
 
               <div>
@@ -1242,9 +1294,10 @@ export const AdminView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={isUploadingImage}
                   className="px-5 py-2.5 bg-[#131b2e] text-white font-['Space_Grotesk'] text-xs font-bold rounded-lg hover:bg-[#fea619] hover:text-[#684000] transition-all cursor-pointer shadow-sm"
                 >
-                  Save Product to Catalogue
+                  {isUploadingImage ? 'Uploading Image…' : 'Save Product to Catalogue'}
                 </button>
               </div>
             </form>
