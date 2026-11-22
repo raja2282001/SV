@@ -13,7 +13,7 @@ export const QuickInquiryModal: React.FC = () => {
 
   const itemTitle = inquiryModal.itemOrService || 'Reprographic / Stationery Inquiry';
 
-  const handleWhatsAppSend = (e: React.FormEvent) => {
+  const handleWhatsAppSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalNote = note ? ` Note: ${note}` : '';
     const text = encodeURIComponent(
@@ -21,7 +21,7 @@ export const QuickInquiryModal: React.FC = () => {
     );
 
     // Also record in internal system
-    addInquiry({
+    const saved = await addInquiry({
       clientName: name || 'Online Visitor',
       clientContact: phone || '+91 Direct WhatsApp',
       itemOrService: itemTitle,
@@ -29,6 +29,7 @@ export const QuickInquiryModal: React.FC = () => {
       volume: volume || '1 Unit',
       notes: note || 'Customer initiated WhatsApp direct chat.',
     });
+    if (!saved) return;
 
     window.open(`https://wa.me/${storeConfig.whatsapp}?text=${text}`, '_blank');
     closeInquiryModal();

@@ -10,9 +10,9 @@ export const ContactView: React.FC = () => {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addInquiry({
+    const saved = await addInquiry({
       clientName: name,
       clientContact: phone,
       itemOrService: subject,
@@ -20,6 +20,7 @@ export const ContactView: React.FC = () => {
       volume: 'Consultation Inquiry',
       notes: message,
     });
+    if (!saved) return;
 
     const text = encodeURIComponent(
       `Hello S V Copiers / Xerox,\nMy name is ${name} (${phone}).\nRegarding: ${subject}\nMessage: ${message}`

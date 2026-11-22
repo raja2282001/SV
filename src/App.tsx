@@ -19,11 +19,22 @@ import { ContactView } from './views/ContactView';
 import { AdminView } from './views/AdminView';
 
 const MainContent: React.FC = () => {
-  const { activeView } = useStore();
+  const { activeView, isLoading, apiError } = useStore();
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8f9ff] text-[#0b1c30] font-['Plus_Jakarta_Sans']">
       <Header />
+
+      {isLoading && (
+        <div role="status" className="bg-[#eff4ff] px-4 py-2 text-center text-sm text-[#45464d]">
+          Loading catalogue data from the server…
+        </div>
+      )}
+      {apiError && (
+        <div role="alert" className="bg-red-50 px-4 py-3 text-center text-sm text-red-800">
+          Could not load live data from the server: {apiError}
+        </div>
+      )}
 
       {/* Main viewport with clearance for fixed header */}
       <main className="w-full pt-20 sm:pt-24 flex-1">

@@ -79,8 +79,12 @@ const initialDatabase: Database = {
     address: 'Shop 10, Siddhivinayak Height, Above Ratnaraj Green, Nana Chiloda, New Shahibaug, Ahmedabad, Gujarat 382330, India.',
     phone: '',
     email: '',
+    whatsapp: '',
     openingHours: '',
     closingHours: '8:00 PM',
+    operationalDays: '',
+    landmark: '',
+    googleMapsQuery: '',
     socialLinks: {},
   },
   enquiries: [],
@@ -411,6 +415,10 @@ app.post('/api/v1/contact', rateLimit(5, 15 * 60 * 1000), asyncRoute(async (requ
 
 app.use('/api/v1/admin', requireAdmin);
 
+app.get('/api/v1/admin/products', (_request, response) => {
+  response.json({ data: database.products });
+});
+
 app.post('/api/v1/admin/products', asyncRoute(async (request, response) => {
   const product = productFrom(request.body || {});
   if (!product) {
@@ -514,7 +522,7 @@ app.patch('/api/v1/admin/enquiries/:id', asyncRoute(async (request, response) =>
 }));
 
 app.patch('/api/v1/admin/settings', asyncRoute(async (request, response) => {
-  const allowed = ['businessName', 'logo', 'address', 'phone', 'email', 'openingHours', 'closingHours', 'socialLinks'];
+  const allowed = ['businessName', 'logo', 'address', 'phone', 'email', 'whatsapp', 'landmark', 'googleMapsQuery', 'operationalDays', 'openingHours', 'closingHours', 'socialLinks'];
   const changes = Object.fromEntries(Object.entries(request.body || {}).filter(([key]) => allowed.includes(key)));
   if (Object.keys(changes).length === 0) {
     response.status(400).json({ error: 'Provide at least one supported settings field.' });
@@ -549,6 +557,15 @@ app.put('/api/v1/admin/services/:id', asyncRoute(async (request, response) => {
   response.json({ data: service });
 }));
 
+app.use('/api', (_request, response) => {
+  response.status(404).json({ error: 'API route not found.' });
+});
+app.use(express.static(path.resolve(process.cwd(), 'dist')));
+app.get('*', (_request, response, next) => {
+  response.sendFile(path.resolve(process.cwd(), 'dist', 'index.html'), (error) => {
+    if (error) next(error);
+  });
+});
 app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
   console.error('API request failed:', error);
   response.status(500).json({ error: 'An unexpected server error occurred.' });

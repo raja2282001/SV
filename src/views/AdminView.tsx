@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../data/initialData';
 
@@ -9,7 +9,11 @@ export const AdminView: React.FC = () => {
     rateCards,
     inquiries,
     storeConfig,
+    adminToken,
+    adminLogin,
+    adminLogout,
     addProduct,
+    updateProduct,
     updateProductPrice,
     toggleProductVisibility,
     deleteProduct,
@@ -60,8 +64,32 @@ export const AdminView: React.FC = () => {
   // New Category prompt
   const [isNewCategoryModal, setIsNewCategoryModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   const pendingInquiries = inquiries.filter(i => i.status === 'PENDING REPLY');
+
+  useEffect(() => {
+    const map: Record<string, number> = {};
+    rateCards.forEach(rate => { map[rate.id] = rate.rate; });
+    setEditableRates(map);
+  }, [rateCards]);
+
+  useEffect(() => {
+    setConfigOpenTime(storeConfig.openTime);
+    setConfigCloseTime(storeConfig.closeTime);
+    setConfigDays(storeConfig.operationalDays);
+    setConfigAddress(storeConfig.address);
+    setConfigPhone(storeConfig.phone);
+    setConfigWhatsapp(storeConfig.whatsapp);
+    setConfigEmail(storeConfig.email);
+  }, [storeConfig]);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await adminLogin(loginUsername, loginPassword);
+    setLoginPassword('');
+  };
 
   // Filtered products for table
   const filteredProducts = products.filter(p => {
@@ -114,8 +142,22 @@ export const AdminView: React.FC = () => {
     const priceNum = parseFloat(formPrice) || 0;
 
     if (editingProductId) {
-      updateProductPrice(editingProductId, priceNum);
-      showToast(`Updated product "${formName}".`);
+      const currentProduct = products.find(product => product.id === editingProductId);
+      if (currentProduct) {
+        void updateProduct({
+          ...currentProduct,
+          name: formName,
+          category: formCategory,
+          brand: formBrand,
+          sku: formSku,
+          price: priceNum,
+          stockStatus: formStockStatus,
+          isPublic: formIsPublic,
+          description: formDesc,
+          specDetails: formDesc,
+          image: formImage,
+        });
+      }
     } else {
       addProduct({
         name: formName,
@@ -165,6 +207,39 @@ export const AdminView: React.FC = () => {
     }
   };
 
+  if (!adminToken) {
+    return (
+      <div className="flex min-h-[65vh] items-center justify-center bg-[#f8f9ff] px-4 py-10">
+        <form onSubmit={handleLoginSubmit} className="w-full max-w-md rounded-2xl border border-[#dce9ff] bg-white p-7 shadow-lg">
+          <h1 className="font-['Space_Grotesk'] text-2xl font-bold text-[#0b1c30]">Admin sign in</h1>
+          <p className="mt-2 text-sm text-[#45464d]">Sign in to manage products, enquiries, rates, and store settings.</p>
+          <label className="mt-5 block text-xs font-bold uppercase text-[#45464d]" htmlFor="admin-username">Username</label>
+          <input
+            id="admin-username"
+            autoComplete="username"
+            required
+            value={loginUsername}
+            onChange={event => setLoginUsername(event.target.value)}
+            className="mt-1 w-full rounded-lg border border-[#dce9ff] bg-[#eff4ff] p-3 text-sm text-[#0b1c30] outline-none focus:border-[#131b2e]"
+          />
+          <label className="mt-4 block text-xs font-bold uppercase text-[#45464d]" htmlFor="admin-password">Password</label>
+          <input
+            id="admin-password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={loginPassword}
+            onChange={event => setLoginPassword(event.target.value)}
+            className="mt-1 w-full rounded-lg border border-[#dce9ff] bg-[#eff4ff] p-3 text-sm text-[#0b1c30] outline-none focus:border-[#131b2e]"
+          />
+          <button type="submit" className="mt-6 w-full rounded-lg bg-[#131b2e] px-4 py-3 text-sm font-bold text-white hover:bg-[#fea619] hover:text-[#684000]">
+            Sign in
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col w-full min-h-screen bg-[#f8f9ff] pb-12">
       {/* System Live Synced Notice */}
@@ -186,6 +261,9 @@ export const AdminView: React.FC = () => {
             <span className="bg-[#dce9ff]/20 px-2 py-0.5 rounded text-white font-bold">
               SYNCED
             </span>
+            <button type="button" onClick={adminLogout} className="rounded border border-white/30 px-2 py-1 hover:bg-white/10">
+              Sign out
+            </button>
           </div>
         </div>
       </div>

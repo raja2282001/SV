@@ -57,3 +57,29 @@ Pass the login token as `Authorization: Bearer <token>` for admin routes. Produc
 npm run lint
 npm run build
 ```
+
+## Deploy frontend and API together on Render
+
+This repository can run as one Render **Web Service**. The build creates `dist/`;
+the Express server serves that frontend and the `/api/v1` API from the same
+origin. The browser uses `/api/v1` by default, so no database or admin secret is
+exposed to frontend code.
+
+1. Create a Render Web Service from this repository and select the `main`
+   branch.
+2. Set the build command to `npm ci && npm run build`.
+3. Set the start command to `npm run start:server`.
+4. In Render's Environment settings, set `MONGODB_URI`, `ADMIN_USERNAME`,
+   `ADMIN_PASSWORD`, and `ADMIN_TOKEN_SECRET`. Do not commit these values or put
+   them in a `VITE_` variable. Render supplies `PORT` automatically.
+5. In MongoDB Atlas, allow network access from the Render service and ensure the
+   database user in `MONGODB_URI` has access to the application database.
+6. Deploy, then check `https://YOUR-SERVICE.onrender.com/api/v1/health`. The
+   homepage is served at the service root; product, contact, and admin actions
+   use the API on the same origin.
+
+For local development, set `VITE_API_BASE_URL=/api/v1` (the default) and run
+`npm run dev:server` and `npm run dev` in separate terminals. Vite proxies
+`/api` to the local API. Keep the frontend and API on the same origin in
+production; a separately hosted frontend requires explicit API CORS support
+and a restricted origin allowlist.
