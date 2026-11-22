@@ -244,9 +244,9 @@ function mapSettings(settings: ApiSettings): StoreConfig {
     phone,
     whatsapp: settings.whatsapp ?? phone.replace(/\D/g, ''),
     email: settings.email ?? INITIAL_STORE_CONFIG.email,
-    openTime: settings.openingHours ?? INITIAL_STORE_CONFIG.openTime,
-    closeTime: settings.closingHours ?? INITIAL_STORE_CONFIG.closeTime,
-    operationalDays: settings.operationalDays ?? INITIAL_STORE_CONFIG.operationalDays,
+    openTime: settings.openingHours || INITIAL_STORE_CONFIG.openTime,
+    closeTime: settings.closingHours || INITIAL_STORE_CONFIG.closeTime,
+    operationalDays: settings.operationalDays || INITIAL_STORE_CONFIG.operationalDays,
     landmark: settings.landmark ?? INITIAL_STORE_CONFIG.landmark,
     googleMapsQuery: settings.googleMapsQuery ?? INITIAL_STORE_CONFIG.googleMapsQuery,
   };

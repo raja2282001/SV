@@ -1,14 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { getStoreHoursStatus, STORE_HOURS } from '../lib/businessHours';
+
+const GOOGLE_MAPS_URL = 'https://www.google.com/maps/place/S+V+COPIERS%2F+XEROX/@23.1093821,72.6711518,20z/data=!4m10!1m2!2m1!1sShop+10,+Siddhivinayak+Height,+Above+Ratnaraj+Green,+Nana+Chiloda,+New+Shahibaug,+Ahmedabad,+Gujarat+382330,+India.!3m6!1s0x395e81657ba57e8f:0x4463c30efb2313cb!8m2!3d23.1092725!4d72.6717867!15sCnNTaG9wIDEwLCBTaWRkaGl2aW5heWFrIEhlaWdodCwgQWJvdmUgUmF0bmFyYWogR3JlZW4sIE5hbmEgQ2hpbG9kYSwgTmV3IFNoYWhpYmF1ZywgQWhtZWRhYmFkLCBHdWphcmF0IDM4MjMzMCwgSW5kaWEukgEJY29weV9zaG9w4AEA!16s%2Fg%2F11vkkvj6yp';
 
 export const ContactView: React.FC = () => {
   const { storeConfig, addInquiry } = useStore();
+  const [clock, setClock] = useState(() => new Date());
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [subject, setSubject] = useState('Bulk Stationery Purchase');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const hoursStatus = getStoreHoursStatus(clock);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,36 +130,81 @@ export const ContactView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-[#eff4ff] p-3 rounded-xl border border-[#dce9ff] flex items-center justify-between text-xs font-['Space_Grotesk']">
-                <span className="text-[#45464d]">Counter Schedule:</span>
-                <span className="font-bold text-[#0b1c30]">
-                  {storeConfig.operationalDays} (Closes {storeConfig.closeTime})
-                </span>
+              <div
+                className={`rounded-xl border p-3 flex items-center gap-2 text-sm font-['Space_Grotesk'] ${
+                  hoursStatus.isOpen
+                    ? 'bg-emerald-50 border-emerald-100 text-emerald-800'
+                    : 'bg-red-50 border-red-100 text-red-700'
+                }`}
+                aria-live="polite"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${hoursStatus.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                <span className="font-bold">{hoursStatus.message}</span>
+                <span className="ml-auto text-xs text-[#45464d]">India time</span>
               </div>
             </div>
 
+            <section className="bg-white rounded-2xl shadow-sm border border-[#dce9ff] overflow-hidden" aria-labelledby="store-hours-heading">
+              <div className="p-5 sm:p-6">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 id="store-hours-heading" className="font-['Space_Grotesk'] text-lg font-bold text-[#0b1c30]">
+                    Opening hours
+                  </h2>
+                  <span className="font-['Plus_Jakarta_Sans'] text-xs text-[#76777d]">Asia/Kolkata (IST)</span>
+                </div>
+                <div className="flex flex-col">
+                  {STORE_HOURS.map(hours => {
+                    const isToday = hours.day === hoursStatus.day;
+                    return (
+                      <div
+                        key={hours.day}
+                        className={`grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-3 border-b last:border-b-0 border-[#eff1f4] font-['Plus_Jakarta_Sans'] text-sm ${
+                          isToday ? 'font-bold text-[#202124]' : 'text-[#3c4043]'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          {hours.day}
+                          {isToday && <span className="text-[10px] uppercase tracking-wide text-[#76777d]">Today</span>}
+                        </span>
+                        <span className="text-right">{hours.display}</span>
+                        {hours.day === 'Tuesday' && (
+                          <span className="col-start-2 text-right text-xs font-normal text-[#76777d]">
+                            Hours might differ on Guru Nanak Gurpurab
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-4 text-xs font-['Plus_Jakarta_Sans'] text-[#76777d]">
+                  Holiday hours may vary. Please call ahead to confirm.
+                </p>
+              </div>
+            </section>
+
             {/* Map image with navigation target */}
-            <div className="rounded-2xl overflow-hidden shadow-sm border border-[#dce9ff] relative h-64 bg-cover bg-center"
-              style={{
-                backgroundImage:
-                  "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBmO6F2cTrLqCtG0FJKnZb4bRueimDwSjGQg0lpoUCxoxoA3gJPoCys8u8KgZs-rpxv3KOQQXOcS9kT7Z1NHlzx-XYozOHDcc_rv6S7gPNmNuhoXjU33K-a9OBf0JQ0NNKHYWIMzciHGqvjDJF7wrKanvrIgDQl7O31zXkwmZYyYma2zyblYP6B8g13ven_yRRa8XG1xksoDbT1_SOGsZ9WmefkbTHrtz-OxOmpdzYLxtmk0cOCs7GL')",
-              }}
-            >
-              <div className="absolute inset-0 bg-black/10"></div>
-              <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md p-3.5 rounded-xl shadow-md flex items-center justify-between">
-                <div>
+            <div className="rounded-2xl overflow-hidden shadow-sm border border-[#dce9ff] bg-white">
+              <iframe
+                title="Map to S V Copiers / Xerox"
+                src="https://maps.google.com/maps?q=23.1092725,72.6717867&z=17&output=embed"
+                className="w-full h-64 border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+              <div className="p-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
                   <span className="font-['Space_Grotesk'] text-xs font-bold text-[#0b1c30] block">
                     {storeConfig.storeName}
                   </span>
                   <span className="font-['Plus_Jakarta_Sans'] text-[11px] text-[#45464d]">
-                    Nana Chiloda, Ahmedabad
+                    Shop 10, Siddhivinayak Height, Nana Chiloda, Ahmedabad
                   </span>
                 </div>
                 <a
-                  href={`https://maps.google.com/?q=${storeConfig.googleMapsQuery}`}
+                  href={GOOGLE_MAPS_URL}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3.5 py-1.5 bg-[#131b2e] text-white font-['Space_Grotesk'] text-xs font-bold rounded-lg hover:bg-[#fea619] hover:text-[#684000] transition-colors"
+                  className="shrink-0 px-3.5 py-2 bg-[#131b2e] text-white font-['Space_Grotesk'] text-xs font-bold rounded-lg hover:bg-[#fea619] hover:text-[#684000] transition-colors"
                 >
                   Open in Google Maps
                 </a>

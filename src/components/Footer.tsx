@@ -17,7 +17,7 @@ export const Footer: React.FC = () => {
               <img
                 alt="S V Copiers / Xerox Logo"
                 className="h-7 w-auto object-contain"
-                src="https://lh3.googleusercontent.com/aida/AEtjO1VvKfB2jlxvddqPSjWyZstnsSJr91O1uf0mNF3ACFkebn0AyhDjjIXGHvfbuooDv6-fbCLPwogOKS1DivnetdN7mR8UIkY9vDZCbGXgJAdBK9yvkdCEhdQobQNhMS5WSVia2g4V1-0ZXNQKlsfP65ICj9C5kPiokiXMFKVgmMr977yOr7wOZfp3ume4g0mS2-_piCcxuwOrJo0lDb6LLZpFzgAV8W8sSs-7ov0p_CXtV3c_0MXwihRqEXI"
+                src="/assets/sv-copiers-logo.svg"
               />
               <span className="font-['Space_Grotesk'] text-lg font-bold text-[#0b1c30] uppercase">
                 {storeConfig.storeName}
