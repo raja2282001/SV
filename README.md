@@ -42,16 +42,16 @@ IMAGEKIT_PRIVATE_KEY=your-imagekit-private-key
 ```
 
 Keep `.env` private and never use temporary development credentials in production. Configure `API_PORT` and `DATA_FILE` to change the API port or data file location.
-The admin product form uploads JPEG, PNG, WebP, and GIF images (up to 5 MB) through the authenticated API to the ImageKit `/products` folder. Configure `IMAGEKIT_PRIVATE_KEY` on the API server; the private key is never sent to the browser. ImageKit uploads fail with a configuration error until this value is set.
+The admin product and category forms upload JPEG, PNG, WebP, and GIF images (up to 5 MB) through the authenticated API to the ImageKit `/products` and `/categories` folders, respectively. Configure `IMAGEKIT_PRIVATE_KEY` on the API server; the private key is never sent to the browser. ImageKit uploads fail with a configuration error until this value is set.
 
 ## API
 
 All routes use `/api/v1`.
 
 - Public: `GET /products`, `GET /products/:slug`, `GET /categories`, `GET /categories/:slug`, `GET /services`, `GET /settings/public`, `POST /contact`
-- Admin: `POST /admin/login`, product create/update/archive, category create/update, `GET /admin/enquiries`, enquiry status updates, service updates, and business settings updates
+- Admin: `POST /admin/login`, product create/update/archive, category create/update/delete, `GET /admin/enquiries`, enquiry status updates, service updates, and business settings updates
 
-Pass the login token as `Authorization: Bearer <token>` for admin routes. Product listing accepts `search`, `category`, `minPrice`, `maxPrice`, `sort`, `page`, and `limit` query parameters. Contact submissions and login attempts are rate-limited.
+Pass the login token as `Authorization: Bearer <token>` for admin routes. Product listing accepts `search`, `category`, `brand`, `availability`, `isAvailable`, `minPrice`, `maxPrice`, `sort`, `page`, and `limit` query parameters; category, brand, and availability filters may be repeated or comma-separated. A category linked to products cannot be deleted. Contact submissions and login attempts are rate-limited.
 
 ## Checks
 

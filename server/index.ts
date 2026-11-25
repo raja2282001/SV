@@ -263,6 +263,51 @@ function validPrice(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
+function queryValues(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : [value];
+  return values.flatMap((item) => typeof item === 'string'
+    ? item.split(',').map((part) => part.trim().toLowerCase()).filter(Boolean)
+    : []);
+}
+
+function validQueryList(value: unknown, maxLength: number): boolean {
+  if (value === undefined) return true;
+  const values = Array.isArray(value) ? value : [value];
+  return values.length <= 50 && values.every((item) => typeof item === 'string' && item.length <= maxLength);
+}
+
+function categoryMatches(productCategory: string, selectedCategory: string): boolean {
+  if (productCategory === selectedCategory) return true;
+  const aliases: Record<string, string[]> = {
+    'pens & pencils': ['pens'],
+    pens: ['pens & pencils'],
+    'notebooks & registers': ['notebooks'],
+    notebooks: ['notebooks & registers'],
+    'school & college essentials': ['school', 'school stationery'],
+    school: ['school & college essentials'],
+    'school stationery': ['school & college essentials'],
+    'office stationery': ['office supplies'],
+    'office supplies': ['office stationery'],
+    'paper products': ['copier paper'],
+    'copier paper': ['paper products'],
+    'art & craft supplies': ['art & craft'],
+    'art & craft': ['art & craft supplies'],
+  };
+  return (aliases[selectedCategory] || []).includes(productCategory);
+}
+
+function productStockStatus(product: Product): string {
+  const specifications = product.specifications;
+  const configuredStatus = specifications && typeof specifications === 'object'
+    ? (specifications as Record<string, unknown>).stockStatus
+    : undefined;
+  if (configuredStatus === 'In Stock at Shop' || configuredStatus === 'Available on Request' ||
+      configuredStatus === 'Low Stock' || configuredStatus === 'Out of Stock') return configuredStatus;
+  if (product.stockQuantity === undefined) return 'Available on Request';
+  if (product.stockQuantity === 0) return 'Out of Stock';
+  return product.stockQuantity < 10 ? 'Low Stock' : 'In Stock at Shop';
+}
+
 function productFrom(body: Record<string, unknown>, existing?: Product): Product | null {
   if (!validText(body.name, 160) || !validText(body.category, 120) || !validPrice(body.price)) return null;
   const now = new Date().toISOString();
@@ -297,16 +342,22 @@ function productFrom(body: Record<string, unknown>, existing?: Product): Product
 
 function categoryFrom(body: Record<string, unknown>, existing?: Category): Category | null {
   if (!validText(body.name, 120)) return null;
+  if (body.description !== undefined &&
+      (typeof body.description !== 'string' || body.description.length > 2000)) return null;
   const name = body.name.trim();
   const slug = validText(body.slug, 140) ? slugify(body.slug) : slugify(name);
   if (!slug) return null;
+  if (body.image !== undefined && (typeof body.image !== 'string' || body.image.length > 2000 ||
+      (body.image !== '' && !/^https?:\/\/\S+$/i.test(body.image.trim())))) return null;
   const now = new Date().toISOString();
   return {
     id: existing?.id || randomBytes(12).toString('hex'),
     name,
     slug,
-    description: typeof body.description === 'string' ? body.description.trim().slice(0, 2000) : '',
-    image: typeof body.image === 'string' ? body.image.trim().slice(0, 2000) : '',
+    description: typeof body.description === 'string'
+      ? body.description.trim().slice(0, 2000)
+      : existing?.description || '',
+    image: typeof body.image === 'string' ? body.image.trim() : existing?.image || '',
     isActive: typeof body.isActive === 'boolean' ? body.isActive : true,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
@@ -338,32 +389,82 @@ app.post('/api/v1/admin/login', rateLimit(8, 15 * 60 * 1000), (request, response
 });
 
 app.get('/api/v1/products', (request, response) => {
-  const page = Math.max(1, Number.parseInt(String(request.query.page || '1'), 10) || 1);
-  const limit = Math.min(100, Math.max(1, Number.parseInt(String(request.query.limit || '12'), 10) || 12));
-  const search = String(request.query.search || '').trim().toLowerCase();
-  const category = String(request.query.category || '').trim().toLowerCase();
+  if ((request.query.page !== undefined && typeof request.query.page !== 'string') ||
+      (request.query.limit !== undefined && typeof request.query.limit !== 'string')) {
+    response.status(400).json({ error: 'Page and limit must be positive integers.' });
+    return;
+  }
+  const page = Number(request.query.page || 1);
+  const limit = Number(request.query.limit || 12);
+  if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(limit) || limit < 1) {
+    response.status(400).json({ error: 'Page and limit must be positive integers.' });
+    return;
+  }
+  const boundedLimit = Math.min(100, limit);
+  if (request.query.search !== undefined &&
+      (typeof request.query.search !== 'string' || request.query.search.length > 200)) {
+    response.status(400).json({ error: 'Search must be a string of 200 characters or fewer.' });
+    return;
+  }
+  const search = (request.query.search || '').trim().toLowerCase();
+  const categories = queryValues(request.query.category);
+  const brands = queryValues(request.query.brand);
+  const availability = queryValues(request.query.availability);
+  if (!validQueryList(request.query.category, 140) || !validQueryList(request.query.brand, 120) ||
+      !validQueryList(request.query.availability, 40) ||
+      [...categories, ...brands].some((value) => value.length > 140) ||
+      availability.some((value) => !['in stock at shop', 'available on request', 'low stock', 'out of stock'].includes(value))) {
+    response.status(400).json({ error: 'One or more product filter values are invalid.' });
+    return;
+  }
+  if (request.query.sort !== undefined && typeof request.query.sort !== 'string') {
+    response.status(400).json({ error: 'Sort must be a string.' });
+    return;
+  }
+  const isAvailable = request.query.isAvailable;
+  if (isAvailable !== undefined && isAvailable !== 'true' && isAvailable !== 'false') {
+    response.status(400).json({ error: 'isAvailable must be true or false.' });
+    return;
+  }
+  if ((request.query.minPrice !== undefined && typeof request.query.minPrice !== 'string') ||
+      (request.query.maxPrice !== undefined && typeof request.query.maxPrice !== 'string')) {
+    response.status(400).json({ error: 'Invalid price range.' });
+    return;
+  }
   const minPrice = request.query.minPrice === undefined ? 0 : Number(request.query.minPrice);
   const maxPrice = request.query.maxPrice === undefined ? Number.POSITIVE_INFINITY : Number(request.query.maxPrice);
-  if (!Number.isFinite(minPrice) || minPrice < 0 || Number.isNaN(maxPrice) || maxPrice < minPrice) {
+  if (!Number.isFinite(minPrice) || minPrice < 0 || Number.isNaN(maxPrice) || maxPrice < minPrice ||
+      (request.query.maxPrice !== undefined && !Number.isFinite(maxPrice))) {
     response.status(400).json({ error: 'Invalid price range.' });
     return;
   }
   const sort = String(request.query.sort || 'newest');
-  if (!['newest', 'name', 'price-asc', 'price-desc'].includes(sort)) {
-    response.status(400).json({ error: 'Sort must be newest, name, price-asc, or price-desc.' });
+  if (!['newest', 'featured', 'name', 'name-asc', 'price-asc', 'price-desc'].includes(sort)) {
+    response.status(400).json({ error: 'Sort must be newest, featured, name, name-asc, price-asc, or price-desc.' });
     return;
   }
+  const categoryNames = categories.map((category) =>
+    database.categories.find((item) => item.slug.toLowerCase() === category)?.name.toLowerCase() || category
+  );
+  const searchFields = (product: Product) => [
+    product.name, product.sku, product.brand, product.category, product.description,
+    ...Object.values(product.specifications || {}),
+  ].filter((field): field is string => typeof field === 'string').join(' ').toLowerCase();
   let products = database.products.filter((product) =>
-    product.isActive && product.name.toLowerCase().includes(search) &&
-    (!category || product.category.toLowerCase() === category || database.categories.find((item) => item.slug === category)?.name.toLowerCase() === product.category.toLowerCase()) &&
+    product.isActive && (!search || searchFields(product).includes(search)) &&
+    (!categoryNames.length || categoryNames.some((category) => categoryMatches(product.category.toLowerCase(), category))) &&
+    (!brands.length || brands.includes((product.brand || '').toLowerCase())) &&
+    (!availability.length || availability.includes(productStockStatus(product).toLowerCase())) &&
+    (isAvailable === undefined || product.isAvailable === (isAvailable === 'true')) &&
     product.price >= minPrice && product.price <= maxPrice
   );
-  products = [...products].sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name)
+  products = [...products].sort((a, b) => sort === 'name' || sort === 'name-asc' ? a.name.localeCompare(b.name)
     : sort === 'price-asc' ? a.price - b.price
     : sort === 'price-desc' ? b.price - a.price
+    : sort === 'featured' ? Number(b.isFeatured) - Number(a.isFeatured)
     : b.createdAt.localeCompare(a.createdAt));
   const total = products.length;
-  response.json({ data: products.slice((page - 1) * limit, page * limit), pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+  response.json({ data: products.slice((page - 1) * boundedLimit, page * boundedLimit), pagination: { page, limit: boundedLimit, total, pages: Math.ceil(total / boundedLimit) } });
 });
 
 app.get('/api/v1/products/:slug', (request, response) => {
@@ -385,7 +486,7 @@ app.get('/api/v1/categories/:slug', (request, response) => {
     response.status(404).json({ error: 'Category not found.' });
     return;
   }
-  response.json({ data: { ...category, products: database.products.filter((product) => product.isActive && product.category.toLowerCase() === category.name.toLowerCase()) } });
+  response.json({ data: { ...category, products: database.products.filter((product) => product.isActive && categoryMatches(product.category.toLowerCase(), category.name.toLowerCase())) } });
 });
 
 app.get('/api/v1/services', (_request, response) => {
@@ -468,7 +569,8 @@ app.post(
     imageBytes.set(request.body);
     formData.append('file', new Blob([imageBytes], { type: mimeType }), uploadFileName);
     formData.append('fileName', uploadFileName);
-    formData.append('folder', '/products');
+    const folder = request.query.folder === 'categories' ? 'categories' : 'products';
+    formData.append('folder', `/${folder}`);
 
     const imageKitResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
       method: 'POST',
@@ -582,9 +684,40 @@ app.put('/api/v1/admin/categories/:id', asyncRoute(async (request, response) => 
     response.status(409).json({ error: 'Category slug already exists.' });
     return;
   }
+  if (category.name.toLowerCase() !== database.categories[index].name.toLowerCase()) {
+    const previousName = database.categories[index].name.toLowerCase();
+    const previousSlug = database.categories[index].slug.toLowerCase();
+    database.products.forEach((product) => {
+      if (categoryMatches(product.category.toLowerCase(), previousName) || product.category.toLowerCase() === previousSlug) {
+        product.category = category.name;
+        product.updatedAt = new Date().toISOString();
+      }
+    });
+  }
   database.categories[index] = category;
   await persistDatabase();
   response.json({ data: category });
+}));
+
+app.delete('/api/v1/admin/categories/:id', asyncRoute(async (request, response) => {
+  const category = database.categories.find((item) => item.id === request.params.id);
+  if (!category) {
+    response.status(404).json({ error: 'Category not found.' });
+    return;
+  }
+  const linkedProducts = database.products.filter((product) =>
+    categoryMatches(product.category.trim().toLowerCase(), category.name.trim().toLowerCase()) ||
+    product.category.trim().toLowerCase() === category.slug.trim().toLowerCase()
+  );
+  if (linkedProducts.length > 0) {
+    response.status(409).json({
+      error: `This category is used by ${linkedProducts.length} product${linkedProducts.length === 1 ? '' : 's'} and cannot be deleted.`,
+    });
+    return;
+  }
+  database.categories = database.categories.filter((item) => item.id !== category.id);
+  await persistDatabase();
+  response.json({ message: 'Category deleted.' });
 }));
 
 app.get('/api/v1/admin/enquiries', (_request, response) => {
