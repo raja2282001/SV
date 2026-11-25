@@ -180,7 +180,7 @@ export const HomeView: React.FC = () => {
 
       {/* HOME CATEGORY SLIDER */}
       <section className="w-full border-y border-[#e5eeff] bg-white py-3">
-        <div className="max-w-[1440px] mx-auto px-1 sm:px-4 lg:px-8">
+        <div className="w-full px-1 sm:px-2">
           <CategorySlider categories={categories} onSelect={category => handleCategoryClick(category.name)} />
         </div>
       </section>
