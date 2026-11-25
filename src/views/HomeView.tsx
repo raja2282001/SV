@@ -178,27 +178,9 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
-      {/* FEATURED CATEGORIES SHOWCASE */}
-      <section className="w-full py-10 bg-[#f8f9ff]">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 flex flex-col gap-6">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-2">
-            <div>
-              <span className="font-['Space_Grotesk'] text-xs uppercase tracking-widest text-[#855300] font-bold">
-                Comprehensive Inventory
-              </span>
-              <h2 className="font-['Space_Grotesk'] text-2xl sm:text-3xl font-bold text-[#0b1c30] tracking-tight">
-                Stationery & Reprographic Categories
-              </h2>
-            </div>
-            <button
-              onClick={() => setActiveView('categories')}
-              className="inline-flex items-center gap-1 font-['Space_Grotesk'] text-xs font-semibold text-[#0b1c30] hover:text-[#fea619] transition-colors cursor-pointer"
-            >
-              <span>Browse All {categories.length} Departments</span>
-              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-            </button>
-          </div>
-
+      {/* HOME CATEGORY SLIDER */}
+      <section className="w-full border-y border-[#e5eeff] bg-white py-3">
+        <div className="max-w-[1440px] mx-auto px-1 sm:px-4 lg:px-8">
           <CategorySlider categories={categories} onSelect={category => handleCategoryClick(category.name)} />
         </div>
       </section>

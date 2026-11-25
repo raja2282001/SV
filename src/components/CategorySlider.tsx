@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { Category } from '../data/initialData';
 
@@ -9,78 +9,98 @@ interface CategorySliderProps {
 
 export const CategorySlider: React.FC<CategorySliderProps> = ({ categories, onSelect }) => {
   const sliderRef = useRef<HTMLDivElement>(null);
+  const isPausedRef = useRef(false);
 
   const scroll = (direction: -1 | 1) => {
-    if (!sliderRef.current) return;
-    sliderRef.current.scrollBy({
-      left: direction * sliderRef.current.clientWidth * 0.8,
-      behavior: 'smooth',
-    });
+    const slider = sliderRef.current;
+    if (!slider) return;
+    const firstCard = slider.firstElementChild;
+    const cardWidth = firstCard instanceof HTMLElement
+      ? firstCard.getBoundingClientRect().width
+      : slider.clientWidth;
+    const gap = Number.parseFloat(window.getComputedStyle(slider).columnGap) || 0;
+    const maxScroll = slider.scrollWidth - slider.clientWidth;
+    const nextPosition = slider.scrollLeft + direction * (cardWidth + gap);
+    const left = maxScroll <= 1
+      ? 0
+      : direction > 0
+        ? slider.scrollLeft >= maxScroll - 2 ? 0 : Math.min(nextPosition, maxScroll)
+        : slider.scrollLeft <= 1 ? maxScroll : Math.max(nextPosition, 0);
+    slider.scrollTo({ left, behavior: 'smooth' });
   };
 
+  useEffect(() => {
+    if (categories.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const intervalId = window.setInterval(() => {
+      if (!isPausedRef.current) scroll(1);
+    }, 4500);
+    return () => window.clearInterval(intervalId);
+  }, [categories.length]);
+
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      role="region"
+      aria-label="Product categories"
+      aria-roledescription="carousel"
+      onMouseEnter={() => { isPausedRef.current = true; }}
+      onMouseLeave={() => { isPausedRef.current = false; }}
+      onFocus={() => { isPausedRef.current = true; }}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          isPausedRef.current = false;
+        }
+      }}
+      onTouchStart={() => { isPausedRef.current = true; }}
+      onTouchEnd={() => { isPausedRef.current = false; }}
+    >
       {categories.length > 1 && (
-        <div className="absolute -top-14 right-0 hidden sm:flex items-center gap-2">
+        <div className="absolute -top-14 right-0 flex items-center gap-2">
           <button
             type="button"
             aria-label="Scroll categories left"
             onClick={() => scroll(-1)}
-            className="w-9 h-9 rounded-full bg-white border border-[#dce9ff] text-[#0b1c30] shadow-sm hover:bg-[#131b2e] hover:text-white transition-colors"
+            className="absolute left-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-[#dce9ff] bg-white text-[#0b1c30] shadow-md transition-colors hover:bg-[#131b2e] hover:text-white"
           >
-            <ChevronLeft className="w-5 h-5 mx-auto" />
+              <ChevronLeft className="h-5 w-5" />
           </button>
           <button
             type="button"
             aria-label="Scroll categories right"
             onClick={() => scroll(1)}
-            className="w-9 h-9 rounded-full bg-white border border-[#dce9ff] text-[#0b1c30] shadow-sm hover:bg-[#131b2e] hover:text-white transition-colors"
+              className="absolute right-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-[#dce9ff] bg-white text-[#0b1c30] shadow-md transition-colors hover:bg-[#131b2e] hover:text-white"
           >
-            <ChevronRight className="w-5 h-5 mx-auto" />
+              <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       )}
       <div
         ref={sliderRef}
-        className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-3 [scrollbar-width:thin] [scrollbar-color:#dce9ff_transparent]"
+        id="home-category-slider"
+          className="flex items-start gap-5 overflow-x-auto snap-x snap-mandatory scroll-smooth px-10 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {categories.map(category => (
           <button
             key={category.id}
             type="button"
             onClick={() => onSelect(category)}
-            className="group relative flex-none w-[78%] sm:w-[42%] lg:w-[calc(25%-12px)] snap-start overflow-hidden rounded-2xl border border-[#dce9ff] bg-white text-left shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#fea619]"
+              className="group flex w-[100px] flex-none snap-start flex-col items-center gap-2 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fea619] sm:w-[128px]"
           >
-            <div className="relative h-40 sm:h-44 overflow-hidden bg-[#eff4ff]">
+              <div className="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-xl bg-[#f8f9ff] transition-transform duration-300 group-hover:scale-105 sm:h-24 sm:w-24">
               {category.image ? (
                 <img
                   src={category.image}
                   alt=""
                   loading="lazy"
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="h-full w-full object-contain p-1"
                 />
               ) : (
-                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-[#eff4ff] via-white to-[#dce9ff] text-[#8191aa]">
-                  <ImageIcon className="w-12 h-12 stroke-1" aria-hidden="true" />
-                </div>
+                  <ImageIcon className="h-9 w-9 stroke-1 text-[#8191aa]" aria-hidden="true" />
               )}
-              <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 font-['Space_Grotesk'] text-[10px] font-bold text-[#0b1c30] shadow-sm">
-                {category.itemCountText}
-              </span>
             </div>
-            <div className="flex min-h-24 flex-col justify-between p-4">
-              <div>
-                <h3 className="font-['Space_Grotesk'] text-base font-bold text-[#0b1c30] line-clamp-1">
-                  {category.name}
-                </h3>
-                <p className="mt-1 font-['Plus_Jakarta_Sans'] text-xs text-[#45464d] line-clamp-2">
-                  {category.description || 'Explore products in this category.'}
-                </p>
-              </div>
-              <span className="mt-3 inline-flex items-center gap-1 font-['Space_Grotesk'] text-[11px] font-bold uppercase tracking-wide text-[#855300]">
-                Explore category <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+              <span className="w-full truncate font-['Plus_Jakarta_Sans'] text-xs font-semibold text-[#303846] transition-colors group-hover:text-[#855300] sm:text-sm">
+                {category.name}
               </span>
-            </div>
           </button>
         ))}
       </div>

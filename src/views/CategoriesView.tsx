@@ -1,6 +1,5 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
-import { CategorySlider } from '../components/CategorySlider';
 
 export const CategoriesView: React.FC = () => {
   const { categories, setSelectedCategoryFilter, setActiveView } = useStore();
@@ -32,7 +31,38 @@ export const CategoriesView: React.FC = () => {
           </p>
         </div>
         {categories.length > 0 ? (
-          <CategorySlider categories={categories} onSelect={category => handleSelectCategory(category.name)} />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {categories.map(category => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => handleSelectCategory(category.name)}
+                className="group overflow-hidden rounded-xl border border-[#dce9ff] bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              >
+                <div className="relative h-40 overflow-hidden bg-[#eff4ff]">
+                  {category.image ? (
+                    <img src={category.image} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#eff4ff] to-white text-[#8191aa]">
+                      <span className="material-symbols-outlined text-5xl" aria-hidden="true">{category.icon || 'folder'}</span>
+                    </div>
+                  )}
+                  <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 font-['Space_Grotesk'] text-[10px] font-bold text-[#0b1c30] shadow-sm">
+                    {category.itemCountText}
+                  </span>
+                </div>
+                <div className="p-4">
+                  <h2 className="font-['Space_Grotesk'] text-base font-bold text-[#0b1c30]">{category.name}</h2>
+                  <p className="mt-1 min-h-8 font-['Plus_Jakarta_Sans'] text-xs text-[#45464d] line-clamp-2">
+                    {category.description || 'Explore products in this category.'}
+                  </p>
+                  <span className="mt-3 inline-flex items-center gap-1 font-['Space_Grotesk'] text-[11px] font-bold uppercase tracking-wide text-[#855300]">
+                    Explore category <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
         ) : (
           <p className="rounded-xl border border-[#dce9ff] bg-white p-6 text-sm text-[#45464d]">
             No categories are available right now.
