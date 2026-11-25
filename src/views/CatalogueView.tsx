@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Product } from '../data/initialData';
+import { categoryMatches } from '../lib/category';
 
 export const CatalogueView: React.FC = () => {
   const {
     products,
+    categories,
+    isLoading,
     storeConfig,
     searchQuery,
     setSearchQuery,
@@ -31,30 +33,26 @@ export const CatalogueView: React.FC = () => {
     if (selectedCategoryFilter && !selectedCategories.includes(selectedCategoryFilter)) {
       setSelectedCategories([selectedCategoryFilter]);
     }
+    setCurrentPage(1);
   }, [selectedCategoryFilter]);
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   // Categories list with counts computed dynamically from products
+  const allCategories = useMemo(() => [...new Set([
+    ...categories.map(category => category.name),
+    ...products.map(product => product.category),
+  ])].sort((a, b) => a.localeCompare(b)), [categories, products]);
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    products.forEach(p => {
-      counts[p.category] = (counts[p.category] || 0) + 1;
+    allCategories.forEach(category => {
+      counts[category] = products.filter(product =>
+        categoryMatches(product.category, category)
+      ).length;
     });
     return counts;
-  }, [products]);
-
-  const allCategories = [
-    'Pens',
-    'Notebooks',
-    'School Stationery',
-    'Office Supplies',
-    'Files & Folders',
-    'Paper Products',
-    'Art & Craft',
-    'Printer Supplies',
-    'Drafting Media',
-    'Binding Supplies',
-    'Finishing Media',
-  ];
+  }, [allCategories, products]);
 
   const standardBrands = [
     'Classmate',
@@ -70,6 +68,8 @@ export const CatalogueView: React.FC = () => {
     'BILT',
     'HP',
   ];
+  const allBrands = [...new Set([...standardBrands, ...products.map(product => product.brand).filter(Boolean)])]
+    .sort((a, b) => a.localeCompare(b));
 
   const toggleCategory = (cat: string) => {
     setSelectedCategories(prev =>
@@ -109,27 +109,21 @@ export const CatalogueView: React.FC = () => {
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesName = p.name.toLowerCase().includes(q);
-        const matchesBrand = p.brand.toLowerCase().includes(q);
-        const matchesCat = p.category.toLowerCase().includes(q);
-        const matchesSku = p.sku.toLowerCase().includes(q);
-        const matchesDesc = p.description.toLowerCase().includes(q);
-        if (!matchesName && !matchesBrand && !matchesCat && !matchesSku && !matchesDesc) {
+        const searchableFields = [p.name, p.brand, p.category, p.sku, p.description, p.specDetails || '', p.badgeLabel || ''];
+        if (!searchableFields.some(field => field.toLowerCase().includes(q))) {
           return false;
         }
       }
 
       // Categories
       if (selectedCategories.length > 0) {
-        const matched = selectedCategories.some(
-          c => p.category.toLowerCase() === c.toLowerCase() || p.category.includes(c)
-        );
+        const matched = selectedCategories.some(c => categoryMatches(p.category, c));
         if (!matched) return false;
       }
 
       // Brands
       if (selectedBrands.length > 0) {
-        if (!selectedBrands.includes(p.brand)) return false;
+        if (!selectedBrands.some(brand => brand.toLowerCase() === p.brand.toLowerCase())) return false;
       }
 
       // Availability
@@ -141,7 +135,7 @@ export const CatalogueView: React.FC = () => {
       if (selectedPriceRange !== 'all') {
         const [minStr, maxStr] = selectedPriceRange.split('-');
         const min = parseInt(minStr, 10);
-        const max = parseInt(maxStr, 10);
+        const max = maxStr ? parseInt(maxStr, 10) : Number.POSITIVE_INFINITY;
         if (p.price < min || p.price > max) return false;
       }
 
@@ -158,12 +152,17 @@ export const CatalogueView: React.FC = () => {
       list.sort((a, b) => b.price - a.price);
     } else if (sortBy === 'name-asc') {
       list.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      list.sort((a, b) => Number(b.popularInHome === true) - Number(a.popularInHome === true));
     }
     return list;
   }, [filteredProducts, sortBy]);
 
   // Pagination
   const totalPages = Math.max(1, Math.ceil(sortedProducts.length / itemsPerPage));
+  React.useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
   const paginatedProducts = sortedProducts.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -248,7 +247,10 @@ export const CatalogueView: React.FC = () => {
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
                   className="absolute right-2.5 text-[#45464d] hover:text-[#0b1c30]"
                 >
                   <span className="material-symbols-outlined text-[18px]">cancel</span>
@@ -297,7 +299,6 @@ export const CatalogueView: React.FC = () => {
                 <div className="flex flex-col gap-1 max-h-52 overflow-y-auto pr-1">
                   {allCategories.map(cat => {
                     const count = categoryCounts[cat] || 0;
-                    if (count === 0 && !selectedCategories.includes(cat)) return null;
                     const isChecked = selectedCategories.includes(cat);
                     return (
                       <label
@@ -334,7 +335,7 @@ export const CatalogueView: React.FC = () => {
                     { label: '₹50 - ₹150', val: '50-150' },
                     { label: '₹150 - ₹300', val: '150-300' },
                     { label: '₹300 - ₹500', val: '300-500' },
-                    { label: 'Above ₹500', val: '500-99999' },
+                    { label: 'Above ₹500', val: '500-' },
                   ].map(item => (
                     <label
                       key={item.val}
@@ -362,7 +363,7 @@ export const CatalogueView: React.FC = () => {
                   Standard Brands
                 </span>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {standardBrands.map(b => (
+                  {allBrands.map(b => (
                     <label
                       key={b}
                       className="flex items-center gap-1.5 font-['Plus_Jakarta_Sans'] text-xs text-[#45464d] hover:text-[#0b1c30] cursor-pointer"
@@ -410,6 +411,17 @@ export const CatalogueView: React.FC = () => {
                       <span>Available on Request</span>
                     </span>
                   </label>
+                  {(['Low Stock', 'Out of Stock'] as const).map(status => (
+                    <label key={status} className="flex items-center gap-2 font-['Plus_Jakarta_Sans'] text-xs text-[#45464d] hover:text-[#0b1c30] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedAvailability.includes(status)}
+                        onChange={() => toggleAvailability(status)}
+                        className="w-3.5 h-3.5 rounded text-[#0b1c30]"
+                      />
+                      <span>{status}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -438,7 +450,8 @@ export const CatalogueView: React.FC = () => {
                 </span>
 
                 {/* Filter tags summary */}
-                {(selectedCategories.length > 0 || selectedBrands.length > 0 || searchQuery) && (
+                {(selectedCategories.length > 0 || selectedBrands.length > 0 ||
+                  selectedAvailability.length > 0 || selectedPriceRange !== 'all' || searchQuery) && (
                   <button
                     onClick={resetAllFilters}
                     className="text-[11px] text-[#855300] hover:underline font-['Space_Grotesk'] font-semibold ml-2"
@@ -458,7 +471,10 @@ export const CatalogueView: React.FC = () => {
                 <select
                   id="catalog-sort"
                   value={sortBy}
-                  onChange={e => setSortBy(e.target.value)}
+                  onChange={e => {
+                    setSortBy(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="bg-[#eff4ff] text-[#0b1c30] font-['Space_Grotesk'] text-xs px-3 py-1.5 rounded-lg focus:outline-none focus:bg-white transition-all cursor-pointer font-semibold shadow-sm border border-[#dce9ff]"
                 >
                   <option value="featured">Featured Index</option>
@@ -470,7 +486,11 @@ export const CatalogueView: React.FC = () => {
             </div>
 
             {/* Product Cards Grid (12 items per page) */}
-            {paginatedProducts.length > 0 ? (
+            {isLoading ? (
+              <div role="status" className="rounded-xl border border-[#dce9ff] bg-white p-10 text-center text-sm text-[#45464d]">
+                Loading products…
+              </div>
+            ) : paginatedProducts.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {paginatedProducts.map(product => (
                   <article

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../data/initialData';
 import { apiErrorMessage, uploadProductImage } from '../lib/api';
+import { categoryMatches } from '../lib/category';
 
 export const AdminView: React.FC = () => {
   const {
@@ -18,7 +19,8 @@ export const AdminView: React.FC = () => {
     updateProductPrice,
     toggleProductVisibility,
     deleteProduct,
-    addCategory,
+    saveCategory,
+    deleteCategory,
     updateRate,
     updateAllRates,
     updateInquiryStatus,
@@ -66,6 +68,10 @@ export const AdminView: React.FC = () => {
   // New Category prompt
   const [isNewCategoryModal, setIsNewCategoryModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [newCatDescription, setNewCatDescription] = useState('');
+  const [newCatImage, setNewCatImage] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [isUploadingCategoryImage, setIsUploadingCategoryImage] = useState(false);
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
@@ -226,12 +232,66 @@ export const AdminView: React.FC = () => {
     });
   };
 
-  const handleAddCategorySubmit = (e: React.FormEvent) => {
+  const handleOpenCategoryModal = (category?: (typeof categories)[number]) => {
+    setEditingCategoryId(category?.id || null);
+    setNewCatName(category?.name || '');
+    setNewCatDescription(category?.description || '');
+    setNewCatImage(category?.image || '');
+    setIsNewCategoryModal(true);
+  };
+
+  const handleCategoryImageUpload = async (file: File) => {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      showToast('Choose a JPEG, PNG, WebP, or GIF image.', 'warning');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Image files must be 5 MB or smaller.', 'warning');
+      return;
+    }
+    if (!adminToken) {
+      showToast('Please log in to the admin portal again.', 'warning');
+      return;
+    }
+
+    const previousImage = newCatImage;
+    const previewUrl = URL.createObjectURL(file);
+    setNewCatImage(previewUrl);
+    setIsUploadingCategoryImage(true);
+    try {
+      const imageUrl = await uploadProductImage(file, adminToken, 'categories');
+      URL.revokeObjectURL(previewUrl);
+      setNewCatImage(imageUrl);
+      showToast('Category image uploaded.');
+    } catch (error) {
+      URL.revokeObjectURL(previewUrl);
+      setNewCatImage(previousImage);
+      showToast(apiErrorMessage(error), 'warning');
+    } finally {
+      setIsUploadingCategoryImage(false);
+    }
+  };
+
+  const handleAddCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newCatName.trim()) {
-      addCategory(newCatName.trim());
+    if (isUploadingCategoryImage || !newCatName.trim()) return;
+    const saved = await saveCategory({
+      name: newCatName.trim(),
+      description: newCatDescription.trim(),
+      image: newCatImage,
+    }, editingCategoryId || undefined);
+    if (saved) {
       setNewCatName('');
+      setNewCatDescription('');
+      setNewCatImage('');
+      setEditingCategoryId(null);
       setIsNewCategoryModal(false);
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
+    if (window.confirm(`Delete "${categoryName}"? Categories linked to products cannot be deleted.`)) {
+      await deleteCategory(categoryId);
     }
   };
 
@@ -750,7 +810,7 @@ export const AdminView: React.FC = () => {
                   </p>
                 </div>
                 <button
-                  onClick={() => setIsNewCategoryModal(true)}
+                  onClick={() => handleOpenCategoryModal()}
                   className="bg-[#131b2e] text-white px-4 py-2.5 rounded-lg font-['Space_Grotesk'] text-xs font-semibold flex items-center gap-2 hover:bg-[#fea619] hover:text-[#684000] transition-all cursor-pointer shadow-sm"
                 >
                   <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
@@ -758,27 +818,47 @@ export const AdminView: React.FC = () => {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {categories.map(cat => {
                   const activeCount = products.filter(
-                    p => p.category.toLowerCase() === cat.name.toLowerCase() || p.category.includes(cat.name)
+                    p => categoryMatches(p.category, cat.name)
                   ).length;
                   return (
                     <div
                       key={cat.id}
-                      className="bg-white p-4 rounded-xl shadow-sm border border-[#dce9ff] flex items-center justify-between"
+                      className="bg-white p-3 rounded-xl shadow-sm border border-[#dce9ff] flex items-center gap-3"
                     >
-                      <div>
-                        <span className="font-['Space_Grotesk'] text-sm font-bold text-[#0b1c30] block">
+                      {cat.image ? (
+                        <img src={cat.image} alt="" className="w-16 h-16 rounded-lg object-cover bg-[#eff4ff]" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-lg bg-[#eff4ff] flex items-center justify-center text-[#76777d]">
+                          <span className="material-symbols-outlined">image</span>
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="font-['Space_Grotesk'] text-sm font-bold text-[#0b1c30] block truncate">
                           {cat.name}
                         </span>
                         <span className="font-['Space_Grotesk'] text-[11px] text-[#76777d]">
-                          {activeCount} Products active
+                          {activeCount} linked products
                         </span>
+                        <div className="mt-2 flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCategoryModal(cat)}
+                            className="font-['Space_Grotesk'] text-[11px] font-bold text-[#0b1c30] hover:text-[#855300]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteCategory(cat.id, cat.name)}
+                            className="font-['Space_Grotesk'] text-[11px] font-bold text-red-700 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                      <span className="material-symbols-outlined text-[#76777d] text-[22px]">
-                        {cat.icon || 'folder'}
-                      </span>
                     </div>
                   );
                 })}
@@ -1316,10 +1396,10 @@ export const AdminView: React.FC = () => {
             onClick={e => e.stopPropagation()}
           >
             <h3 className="font-['Space_Grotesk'] text-base font-bold text-[#0b1c30] mb-1">
-              Add New Category
+              {editingCategoryId ? 'Edit Category' : 'Add New Category'}
             </h3>
             <p className="font-['Plus_Jakarta_Sans'] text-xs text-[#45464d] mb-3">
-              Enter division classification for the Ahmedabad store inventory.
+              Add a name and optional image for this catalogue category.
             </p>
 
             <form onSubmit={handleAddCategorySubmit} className="flex flex-col gap-3">
@@ -1331,19 +1411,53 @@ export const AdminView: React.FC = () => {
                 onChange={e => setNewCatName(e.target.value)}
                 className="w-full p-2 bg-[#eff4ff] text-[#0b1c30] font-['Plus_Jakarta_Sans'] text-xs rounded border border-[#dce9ff] focus:outline-none"
               />
+              <textarea
+                rows={2}
+                placeholder="Short category description (optional)"
+                value={newCatDescription}
+                onChange={e => setNewCatDescription(e.target.value)}
+                className="w-full p-2 bg-[#eff4ff] text-[#0b1c30] font-['Plus_Jakarta_Sans'] text-xs rounded border border-[#dce9ff] focus:outline-none"
+              />
+              <label className="flex flex-col gap-2 font-['Space_Grotesk'] text-xs font-bold text-[#0b1c30]">
+                Category Image
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  disabled={isUploadingCategoryImage}
+                  onChange={event => {
+                    const file = event.target.files?.[0];
+                    if (file) void handleCategoryImageUpload(file);
+                    event.currentTarget.value = '';
+                  }}
+                  className="w-full text-xs font-normal file:mr-3 file:rounded file:border-0 file:bg-[#eff4ff] file:px-3 file:py-2 file:text-xs file:font-bold"
+                />
+              </label>
+              <p className="text-[11px] text-[#76777d]">JPEG, PNG, WebP, or GIF; maximum 5 MB.</p>
+              {newCatImage && (
+                <img
+                  src={newCatImage}
+                  alt="Category preview"
+                  className="h-36 w-full rounded-lg border border-[#dce9ff] bg-[#eff4ff] object-cover"
+                />
+              )}
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsNewCategoryModal(false)}
+                  onClick={() => {
+                    setIsNewCategoryModal(false);
+                    setEditingCategoryId(null);
+                    setNewCatImage('');
+                  }}
                   className="px-3 py-1.5 text-xs text-[#45464d]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
+                  disabled={isUploadingCategoryImage}
                   className="px-4 py-2 bg-[#131b2e] text-white rounded font-['Space_Grotesk'] text-xs font-bold hover:bg-[#fea619] hover:text-[#684000]"
                 >
-                  Add Category
+                  {isUploadingCategoryImage ? 'Uploading…' : editingCategoryId ? 'Save Changes' : 'Add Category'}
                 </button>
               </div>
             </form>

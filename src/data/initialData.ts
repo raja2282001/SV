@@ -23,6 +23,7 @@ export interface Category {
   itemCount: number;
   icon: string;
   description: string;
+  image?: string;
 }
 
 export interface PrintingRateCard {

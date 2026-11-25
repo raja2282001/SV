@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useStore } from '../context/StoreContext';
+import { CategorySlider } from '../components/CategorySlider';
 
 export const HomeView: React.FC = () => {
   const {
@@ -8,26 +9,10 @@ export const HomeView: React.FC = () => {
     rateCards,
     storeConfig,
     setActiveView,
-    setSearchQuery,
     setSelectedCategoryFilter,
     setDetailProduct,
     openInquiryModal,
   } = useStore();
-
-  const [searchInput, setSearchInput] = useState('');
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchInput.trim()) {
-      setSearchQuery(searchInput.trim());
-      setActiveView('product-catalogue');
-    }
-  };
-
-  const handleQuickTag = (tag: string) => {
-    setSearchQuery(tag);
-    setActiveView('product-catalogue');
-  };
 
   const handleCategoryClick = (catName: string) => {
     if (catName.toLowerCase().includes('printing') || catName.toLowerCase().includes('services')) {
@@ -193,52 +178,6 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
-      {/* LIVE SEARCH & QUICK FILTER CONSOLE */}
-      <section className="w-full bg-[#eff4ff] py-6 border-b border-[#dce9ff]">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 flex flex-col gap-3">
-          <form
-            onSubmit={handleSearchSubmit}
-            className="bg-white rounded-xl p-3 shadow-sm flex flex-col md:flex-row items-center gap-3 border border-[#dce9ff]"
-          >
-            <div className="relative w-full flex-1">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#45464d] text-[22px]">
-                search
-              </span>
-              <input
-                className="w-full pl-12 pr-4 py-3 bg-[#eff4ff] text-[#0b1c30] placeholder:text-[#76777d] font-['Plus_Jakarta_Sans'] text-sm rounded-lg focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#0b1c30] transition-all"
-                placeholder="Search pens, notebooks, copier paper, files, or printing services..."
-                type="search"
-                value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-5 py-3 bg-[#131b2e] text-white font-['Space_Grotesk'] text-xs font-semibold rounded-lg hover:bg-[#fea619] hover:text-[#684000] transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[16px]">tune</span>
-              <span>All Departments</span>
-            </button>
-          </form>
-
-          {/* Quick Filter Tags */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-['Space_Grotesk'] text-[11px] uppercase tracking-wider text-[#45464d] font-bold mr-1">
-              Popular Quick Tags:
-            </span>
-            {['Ball Pens', 'Classmate Notebooks', 'A4 75GSM Paper', 'Spiral Binding', 'Photo Glossy Print', 'Desk Organizers'].map(tag => (
-              <button
-                key={tag}
-                onClick={() => handleQuickTag(tag)}
-                className="px-3 py-1 bg-white hover:bg-[#dce9ff] text-[#0b1c30] font-['Space_Grotesk'] text-xs font-semibold rounded-md shadow-sm transition-all border border-[#dce9ff] cursor-pointer"
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* FEATURED CATEGORIES SHOWCASE */}
       <section className="w-full py-10 bg-[#f8f9ff]">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 flex flex-col gap-6">
@@ -260,63 +199,7 @@ export const HomeView: React.FC = () => {
             </button>
           </div>
 
-          {/* Categories 4-Column Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {categories.map((cat, idx) => {
-              const isServices = cat.id === 'services';
-              return (
-                <div
-                  key={cat.id || idx}
-                  onClick={() => handleCategoryClick(cat.name)}
-                  className={`group rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between h-48 relative overflow-hidden cursor-pointer border ${
-                    isServices
-                      ? 'bg-[#131b2e] text-white border-[#131b2e]'
-                      : 'bg-white text-[#0b1c30] border-[#dce9ff]'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div
-                      className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
-                        isServices
-                          ? 'bg-white/10 text-[#fea619] group-hover:bg-[#fea619] group-hover:text-[#684000]'
-                          : 'bg-[#eff4ff] text-[#0b1c30] group-hover:bg-[#fea619] group-hover:text-[#684000]'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[24px]">
-                        {cat.icon}
-                      </span>
-                    </div>
-                    <span
-                      className={`font-['Space_Grotesk'] text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                        isServices
-                          ? 'bg-white/10 text-white'
-                          : 'bg-[#eff4ff] text-[#45464d]'
-                      }`}
-                    >
-                      {cat.itemCountText}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3
-                      className={`font-['Plus_Jakarta_Sans'] text-base font-bold transition-colors ${
-                        isServices ? 'text-white' : 'text-[#0b1c30] group-hover:text-[#00174b]'
-                      }`}
-                    >
-                      {cat.name}
-                    </h3>
-                    <p
-                      className={`font-['Plus_Jakarta_Sans'] text-xs line-clamp-1 mt-1 ${
-                        isServices ? 'text-white/70' : 'text-[#45464d]'
-                      }`}
-                    >
-                      {cat.description}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <CategorySlider categories={categories} onSelect={category => handleCategoryClick(category.name)} />
         </div>
       </section>
 

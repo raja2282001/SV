@@ -28,8 +28,12 @@ export async function apiRequest<T>(
   return body as T;
 }
 
-export async function uploadProductImage(file: File, token: string): Promise<string> {
-  const query = new URLSearchParams({ fileName: file.name });
+export async function uploadProductImage(
+  file: File,
+  token: string,
+  folder: 'products' | 'categories' = 'products',
+): Promise<string> {
+  const query = new URLSearchParams({ fileName: file.name, folder });
   const response = await fetch(`${apiBaseUrl}/admin/images?${query}`, {
     method: 'POST',
     headers: {

@@ -9,6 +9,7 @@ import {
   INITIAL_STORE_CONFIG,
 } from '../data/initialData';
 import { apiErrorMessage, apiRequest } from '../lib/api';
+import { categoryMatches } from '../lib/category';
 
 export type NavView = 'home' | 'product-catalogue' | 'printing-and-services' | 'categories' | 'about-us' | 'contact-us' | 'admin-portal';
 
@@ -107,7 +108,8 @@ interface StoreContextType {
   updateProductPrice: (idOrSku: string, newPrice: number) => Promise<void>;
   toggleProductVisibility: (id: string) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
-  addCategory: (name: string, description?: string) => Promise<void>;
+  saveCategory: (category: { name: string; description?: string; image?: string }, id?: string) => Promise<boolean>;
+  deleteCategory: (id: string) => Promise<boolean>;
   updateRate: (id: string, newRate: number) => Promise<void>;
   updateAllRates: (updatedRates: Record<string, number>) => Promise<void>;
   addInquiry: (inquiry: Omit<CustomerInquiry, 'id' | 'receivedTime' | 'status'>) => Promise<boolean>;
@@ -187,7 +189,7 @@ function toApiProduct(product: Omit<Product, 'id'> | Product): Record<string, un
 
 function mapCategory(category: ApiCategory, products: Product[]): Category {
   const itemCount = products.filter((product) =>
-    product.category.toLowerCase() === category.name.toLowerCase()
+    categoryMatches(product.category, category.name)
   ).length;
   return {
     id: category.id,
@@ -196,6 +198,7 @@ function mapCategory(category: ApiCategory, products: Product[]): Category {
     itemCount,
     icon: 'folder_open',
     description: category.description || '',
+    image: category.image || '',
   };
 }
 
@@ -435,11 +438,45 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       method: 'DELETE',
     }, adminToken || undefined), 'Product archived.');
 
-  const addCategory = (name: string, description = '') =>
-    runAdminMutation(() => apiRequest('/admin/categories', {
-      method: 'POST',
-      body: JSON.stringify({ name, description }),
-    }, adminToken || undefined), `Category "${name}" created.`);
+  const saveCategory = async (
+    category: { name: string; description?: string; image?: string },
+    id?: string,
+  ): Promise<boolean> => {
+    if (!adminToken) {
+      showToast('Please log in to the admin portal again.', 'warning');
+      return false;
+    }
+    try {
+      await apiRequest(id ? `/admin/categories/${encodeURIComponent(id)}` : '/admin/categories', {
+        method: id ? 'PUT' : 'POST',
+        body: JSON.stringify(category),
+      }, adminToken);
+      await loadData(adminToken);
+      showToast(id ? `Category "${category.name}" updated.` : `Category "${category.name}" created.`);
+      return true;
+    } catch (error) {
+      showToast(apiErrorMessage(error), 'warning');
+      return false;
+    }
+  };
+
+  const deleteCategory = async (id: string): Promise<boolean> => {
+    if (!adminToken) {
+      showToast('Please log in to the admin portal again.', 'warning');
+      return false;
+    }
+    try {
+      await apiRequest(`/admin/categories/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }, adminToken);
+      await loadData(adminToken);
+      showToast('Category deleted.');
+      return true;
+    } catch (error) {
+      showToast(apiErrorMessage(error), 'warning');
+      return false;
+    }
+  };
 
   const updateRate = (id: string, newRate: number) => updateAllRates({ [id]: newRate });
 
@@ -532,7 +569,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updateProductPrice,
       toggleProductVisibility,
       deleteProduct,
-      addCategory,
+      saveCategory,
+      deleteCategory,
       updateRate,
       updateAllRates,
       addInquiry,
