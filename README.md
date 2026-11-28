@@ -80,6 +80,24 @@ exposed to frontend code.
    homepage is served at the service root; product, contact, and admin actions
    use the API on the same origin.
 
+## Deploy frontend and API together on Vercel
+
+The Vercel Function in `api/[...path].ts` routes API requests to the Express
+application. Vercel invokes it on demand, so MongoDB must be configured; the
+local JSON-file fallback is disabled there.
+
+1. Create a MongoDB Atlas database and database user, and configure its network
+   access to accept connections from your Vercel deployment.
+2. Import this repository into Vercel with the repository root as the project
+   root. Select the Vite preset, set the install command to `npm ci`, the build
+   command to `npm run build`, and the output directory to `dist`. Do not use
+   `npm run start:server` as an install or build command.
+3. Add `MONGODB_URI`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and
+   `ADMIN_TOKEN_SECRET` in the Vercel project's Environment Variables. Add
+   `IMAGEKIT_PRIVATE_KEY` if product or category image uploads are used.
+   `VITE_API_BASE_URL` can remain `/api/v1`.
+4. Deploy and verify `https://YOUR-DEPLOYMENT.vercel.app/api/v1/health`.
+
 For local development, set `VITE_API_BASE_URL=/api/v1` (the default) and run
 `npm run dev:server` and `npm run dev` in separate terminals. Vite proxies
 `/api` to the local API. Keep the frontend and API on the same origin in

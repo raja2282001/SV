@@ -109,6 +109,9 @@ function cleanMongoDocuments(documents: object[]): Array<Record<string, unknown>
 }
 
 async function loadDatabase(): Promise<void> {
+  if (process.env.VERCEL && !process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI is required when running on Vercel.');
+  }
   if (process.env.MONGODB_URI) {
     try {
       await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
@@ -130,8 +133,12 @@ async function loadDatabase(): Promise<void> {
       console.log('Connected to MongoDB.');
       return;
     } catch (error) {
-      console.warn('MongoDB is unavailable. Falling back to local JSON data:', (error as Error).message);
       await mongoose.disconnect().catch(() => undefined);
+      if (process.env.VERCEL) {
+        console.error('MongoDB is unavailable on Vercel:', (error as Error).message);
+        throw error;
+      }
+      console.warn('MongoDB is unavailable. Falling back to local JSON data:', (error as Error).message);
     }
   }
   try {
@@ -182,6 +189,24 @@ function persistDatabase(): Promise<void> {
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
+
+let databaseInitialization: Promise<void> | null = null;
+if (process.env.VERCEL) {
+  app.use((_request, _response, next) => {
+    if (!databaseInitialization) {
+      databaseInitialization = Promise.resolve().then(() => {
+        if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_TOKEN_SECRET) {
+          throw new Error('ADMIN_PASSWORD and ADMIN_TOKEN_SECRET are required when running on Vercel.');
+        }
+        return loadDatabase();
+      }).catch((error: unknown) => {
+        databaseInitialization = null;
+        throw error;
+      });
+    }
+    databaseInitialization.then(() => next()).catch(next);
+  });
+}
 
 const requestWindows = new Map<string, { count: number; resetAt: number }>();
 function rateLimit(limit: number, windowMs: number) {
@@ -779,28 +804,34 @@ app.put('/api/v1/admin/services/:id', asyncRoute(async (request, response) => {
 app.use('/api', (_request, response) => {
   response.status(404).json({ error: 'API route not found.' });
 });
-app.use(express.static(path.resolve(process.cwd(), 'dist')));
-app.get('*', (_request, response, next) => {
-  response.sendFile(path.resolve(process.cwd(), 'dist', 'index.html'), (error) => {
-    if (error) next(error);
+if (!process.env.VERCEL) {
+  app.use(express.static(path.resolve(process.cwd(), 'dist')));
+  app.get('*', (_request, response, next) => {
+    response.sendFile(path.resolve(process.cwd(), 'dist', 'index.html'), (error) => {
+      if (error) next(error);
+    });
   });
-});
+}
 app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
   console.error('API request failed:', error);
   response.status(500).json({ error: 'An unexpected server error occurred.' });
 });
 
 const port = Number(process.env.PORT || process.env.API_PORT || 3001);
-loadDatabase().then(() => {
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`S V Copiers API listening on http://localhost:${port}/api/v1`);
-    if (generatedPassword) {
-      console.warn(`Temporary development admin credentials: ${adminUsername} / ${adminPassword}`);
-      console.warn('Set ADMIN_PASSWORD and ADMIN_TOKEN_SECRET in .env before deployment.');
-    }
-    console.log(`Local data file: ${dataFile}`);
+if (!process.env.VERCEL) {
+  loadDatabase().then(() => {
+    app.listen(port, '0.0.0.0', () => {
+      console.log(`S V Copiers API listening on http://localhost:${port}/api/v1`);
+      if (generatedPassword) {
+        console.warn(`Temporary development admin credentials: ${adminUsername} / ${adminPassword}`);
+        console.warn('Set ADMIN_PASSWORD and ADMIN_TOKEN_SECRET in .env before deployment.');
+      }
+      console.log(`Local data file: ${dataFile}`);
+    });
+  }).catch((error) => {
+    console.error(`Could not load API data file at ${dataFile}:`, error);
+    process.exitCode = 1;
   });
-}).catch((error) => {
-  console.error(`Could not load API data file at ${dataFile}:`, error);
-  process.exitCode = 1;
-});
+}
+
+export default app;
