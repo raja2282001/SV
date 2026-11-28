@@ -82,7 +82,7 @@ exposed to frontend code.
 
 ## Deploy frontend and API together on Vercel
 
-The Vercel Function in `api/[...path].ts` routes API requests to the Express
+The Vercel Function in `api/index.ts` routes API requests to the Express
 application. Vercel invokes it on demand, so MongoDB must be configured; the
 local JSON-file fallback is disabled there.
 
